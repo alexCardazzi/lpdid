@@ -73,12 +73,22 @@ get_weights <- function(df, j, time_index){
 #' @param reg An object generated via the lpdid function.
 #' @param conf The confidence level (1-alpha) desired for confidence intervals. Default is 0.95 (95% confidence internval)
 #' @param segments A boolean (TRUE or FALSE) value for whether confidence intervals should be generated.  Default is TRUE.
+#' @param add A boolean (TRUE or FALSE) value for whether the user wants to add to an existing figure or generate a new one.  The default is FALSE, meaning a new plot.
+#' @param xlab The text belonging on the x axis.
+#' @param ylab The text belonging on the y axis.
+#' @param main The text belonging as the figure's title.
+#' @param x.shift A numeric value that will shift the event study estimates along the x-axis.
+#' @param pch A numeric value corresponding to the point's shape.
+#' @param cex A numeric value corresponding to the size of the point.
+#' @param col The color the points (and confidence intervals) should be.
+#' @param opacity A numeric value between 0 and 1 that corresponds to the opacity of the color.
 #' @return An event study plot.
 #' @export
 plot_lpdid <- function(reg, conf = .95, segments = TRUE, add = FALSE,
                        xlab = NULL, ylab = NULL, main = "", x.shift = 0,
                        pch = 19, cex = 1, col = "black", opacity = 1){
 
+  if(nrow(reg$coeftable) != length(reg$window)) stop("coeftable and window are not the same length.  It is likely that pooled=TRUE in the lpdid function.  An event study cannot be plotted when pooled=TRUE.")
   coeftable <- reg$coeftable
   coeftable$t <- reg$window
   conf_z <- abs(qnorm((1-conf)/2))

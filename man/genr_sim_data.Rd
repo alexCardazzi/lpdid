@@ -7,8 +7,8 @@
 genr_sim_data(exogenous_timing = TRUE, seed = 757)
 }
 \arguments{
-\item{exogenous_timing}{A boolean value that, if set to TRUE, will make treatment exogenous.  When set to FALSE,
-previous values of Y will make treatment more likely, or endogenous.}
+\item{exogenous_timing}{A boolean (TRUE or FALSE) value that, if set to TRUE, will make treatment exogenous.  When set to FALSE,
+previous values of Y will make treatment more likely, or endogenous. Default is TRUE}
 
 \item{seed}{A numeric value to set.seed().}
 }

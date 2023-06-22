@@ -22,9 +22,27 @@ plot_lpdid(
 \arguments{
 \item{reg}{An object generated via the lpdid function.}
 
-\item{conf}{The confidence level (1-alpha) desired for confidence intervals.}
+\item{conf}{The confidence level (1-alpha) desired for confidence intervals. Default is 0.95 (95% confidence internval)}
 
-\item{segments}{A boolean value that will generate confidence intervals.  Default is TRUE.}
+\item{segments}{A boolean (TRUE or FALSE) value for whether confidence intervals should be generated.  Default is TRUE.}
+
+\item{add}{A boolean (TRUE or FALSE) value for whether the user wants to add to an existing figure or generate a new one.  The default is FALSE, meaning a new plot.}
+
+\item{xlab}{The text belonging on the x axis.}
+
+\item{ylab}{The text belonging on the y axis.}
+
+\item{main}{The text belonging as the figure's title.}
+
+\item{x.shift}{A numeric value that will shift the event study estimates along the x-axis.}
+
+\item{pch}{A numeric value corresponding to the point's shape.}
+
+\item{cex}{A numeric value corresponding to the size of the point.}
+
+\item{col}{The color the points (and confidence intervals) should be.}
+
+\item{opacity}{A numeric value between 0 and 1 that corresponds to the opacity of the color.}
 }
 \value{
 An event study plot.
