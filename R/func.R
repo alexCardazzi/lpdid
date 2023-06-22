@@ -71,8 +71,8 @@ get_weights <- function(df, j, time_index){
 #'
 #' Plotting LP-DiD event study parameter estimates and confidence intervals.
 #' @param reg An object generated via the lpdid function.
-#' @param conf The confidence level (1-alpha) desired for confidence intervals.
-#' @param segments A boolean value that will generate confidence intervals.  Default is TRUE.
+#' @param conf The confidence level (1-alpha) desired for confidence intervals. Default is 0.95 (95% confidence internval)
+#' @param segments A boolean (TRUE or FALSE) value for whether confidence intervals should be generated.  Default is TRUE.
 #' @return An event study plot.
 #' @export
 plot_lpdid <- function(reg, conf = .95, segments = TRUE, add = FALSE,
@@ -109,8 +109,8 @@ plot_lpdid <- function(reg, conf = .95, segments = TRUE, add = FALSE,
 #' Simulate Data from Dube et al. (2023)
 #'
 #' This function generates simulated data from Dube et al. (2023).
-#' @param exogenous_timing A boolean value that, if set to TRUE, will make treatment exogenous.  When set to FALSE,
-#'  previous values of Y will make treatment more likely, or endogenous.
+#' @param exogenous_timing A boolean (TRUE or FALSE) value that, if set to TRUE, will make treatment exogenous.  When set to FALSE,
+#'  previous values of Y will make treatment more likely, or endogenous. Default is TRUE
 #' @param seed A numeric value to set.seed().
 #' @return A simulated dataset.
 #' @export
@@ -193,8 +193,8 @@ genr_sim_data <- function(exogenous_timing = TRUE, seed = 757){
 #' This function estimates LP-DiD regressions as outlined in Dube et al. (2023) <doi:10.3386/w31184>.
 #' @param df The dataset used in the analysis.
 #' @param window A vector of length two that denotes the length of the pre- and post-periods.
-#'  The first number should be negative and second should be positive.
-#' @param y The outcome variable.  This should be a character.
+#'  The first number, denoting the number of pre-periods before treamtent, should be negative and second, denoting the number of post periods after treatment, should be positive.
+#' @param y The outcome variable.  This should be input as a character, the name of the outcome variable in the data.
 #' @param unit_index The name of the column that represents the unit ID.  This should be a character.
 #' @param time_index The name of the column that represents the calendar time.  This should be a character.
 #' @param rel_time The name of the column that contains a "time to treatment" vector.
@@ -202,17 +202,17 @@ genr_sim_data <- function(exogenous_timing = TRUE, seed = 757){
 #' @param controls A vector of names of control variables to be included in the regression formula.
 #' @param outcome_lags The number of outcome lags to be included in the analysis.
 #'  For an example of this, simulate endogenous data via genr_sim_data(FALSE), and include one outcome lag.
-#' @param reweight A boolean value that will re-weight the regression and generate ATT rather than VWATT.
-#' @param pmd A boolean value that, if equal to TRUE, will use pre-treatment means rather than a single value from t-1.
+#' @param reweight A boolean (TRUE or FALSE) value that will re-weight the regression and generate ATT rather than VWATT. The default is FALSE, which corresponds to the estimator calculating the VWATT (variance weighted average treatment effect on the treated).
+#' @param pmd A boolean (TRUE or FALSE) value that, if equal to TRUE, will use pre-treatment means rather than a single value from t-1.
 #' @param pmd_lag The number of pre-treatment periods to include in taking the mean.
 #' @param composition_correction A boolean value that will remove later-treated observations from the control group even before they are treated.  See Section 2.10 "Composition effects".
-#' @param pooled A boolean value that, if equal to TRUE, will calculate the treatment effect pooled over all post-periods.
-#' @param nonabsorbing A boolean value that, if equal to TRUE, will preform a routine similar to "stacking".
+#' @param pooled A boolean value (TRUE or FALSE) that, if equal to TRUE, will calculate the treatment effect pooled over all post-periods.
+#' @param nonabsorbing A boolean value (TRUE or FALSE) that, if equal to TRUE, will preform a routine similar to "stacking".
 #'  Using this option requires a different variable than "rel_time".  More details can be seen in "nonabsorbing_treatment_status".
 #' @param nonabsorbing_lag Sets the number of periods after which dynamic effects stabilize.
 #' @param nonabsorbing_treat_status The name of the column that denotes treatment status.
 #'  This vector must take on a value of 1 when the unit is treated and dynamics are still in play and zero otherwise.
-#'  As an example, in a state-year panel, if a state is treated in 1990 and 2010, and dynamics settle after 5 years, the state should have 1's for 1990-1994 and 2010-2014.
+#'  As an example, in a state-year panel, if a state is treated in 1990 and 2010, and dynamics settle after 5 years, the state should have 1's for 1990-1994 and 2010-2014 and zeros elsewhere. This values of this variable are extremely case specific.
 #' @return A list including a coefficient table and window vector.
 #' @export
 lpdid <- function(df, window = c(NA, NA), y,
