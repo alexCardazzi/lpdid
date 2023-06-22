@@ -9,3 +9,15 @@ R Package for LP-DiD
 - Written by  [Alexander Cardazzi](https://alexcardazzi.github.io/), with a few contributions from [Zachary Porreca](https://zachporreca.github.io/)
 
 - [Vignette](https://alexcardazzi.github.io/lpdid_vignette.html) with use demonstrations
+
+- Installation Instructions:
+
+    ```
+      devtools::install_github("alexCardazzi/lpdid")
+    ```
+    
+ - And then after installation can be called by:
+      ```
+       library(lpdid)
+      ```
+      
