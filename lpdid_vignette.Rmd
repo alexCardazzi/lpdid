@@ -18,6 +18,8 @@ knitr::opts_chunk$set(
 
 ## Getting Started
 
+<Do we really want to capitalize, the "s" in "started". Feels offensive.>
+
 Please see the working paper on which this package is based [here](https://www.nber.org/papers/w31184).
 
 To install and load this package, use the following code:
