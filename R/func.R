@@ -18,8 +18,6 @@ pmd_func <- function(df, y, pmd_lag){
   return(the_lag)
 }
 
-# Test Comment
-
 #' Post-Mean Differencing
 #'
 #' Calculate post-treatment means rather than just using a single y value from t+h.
