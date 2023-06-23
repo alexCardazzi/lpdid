@@ -38,6 +38,8 @@ library("lpdid")
 To begin, consider a simple 2x2 DiD where treatment begins at $t = 31$.  Only twenty out of fifty units get treated, and the treatment dynamics cause the outcome variable to increase linearly with time.  Below, the outcome is averaged by time and whether the unit receives treatment at some point.
 
 ```{r, fig.width=7, fig.height=5, fig.align='center', cache=TRUE}
+library("fixest")
+
 set.seed(757)
 I <- 50; T <- 50; N <- I * T
 data.frame(id = rep(1:I, each = T),
