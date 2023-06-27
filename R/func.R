@@ -315,7 +315,7 @@ lpdid <- function(df, window = c(NA, NA), y,
       if(!nonabsorbing){
 
         lim <- !is.na(df[,"Dy"]) & !is.na(df$treat_diff) & !is.na(lead(df$treat, j)) & (df$treat_diff == 1 | lead(df$treat, j) == 0)
-        if(composition_correction) lim <- !is.na(df[,"Dy"]) & !is.na(df$treat_diff) & !is.na(lead(df$treat, j)) & (df$treat_diff == 1 | lead(df$treat, post_window) == 0) & (is.na(df$treat_date) | (df$treat_date < max(df[,time_index]) - post_window))
+        if(composition_correction) lim <- !is.na(df[,"Dy"]) & !is.na(df$treat_diff) & !is.na(lead(df$treat, j)) & (df$treat_diff == 1 | lead(df$treat, post_window) == 0) & (is.na(df$treat_date) | (df$treat_date < max(as.numeric(df[,time_index])) - post_window))
         lim <- lim & df$reweight_use > 0
       } else {
 
@@ -357,7 +357,7 @@ lpdid <- function(df, window = c(NA, NA), y,
       if(!nonabsorbing){
 
         lim <- !is.na(df[,"Dy"]) & !is.na(df$treat_diff) & !is.na(df$treat) & (df$treat_diff == 1 | df$treat == 0)
-        if(composition_correction) lim <- !is.na(df[,"Dy"]) & !is.na(df$treat_diff) & !is.na(df$treat) & (df$treat_diff == 1 | lead(df$treat, post_window) == 0) & (is.na(df$treat_date) | (df$treat_date < max(df[,time_index]) - post_window))
+        if(composition_correction) lim <- !is.na(df[,"Dy"]) & !is.na(df$treat_diff) & !is.na(df$treat) & (df$treat_diff == 1 | lead(df$treat, post_window) == 0) & (is.na(df$treat_date) | (df$treat_date < max(as.numeric(df[,time_index])) - post_window))
         lim <- lim & df$reweight_0 > 0
       } else {
 
