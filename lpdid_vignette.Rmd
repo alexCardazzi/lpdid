@@ -286,6 +286,6 @@ abline(h = mean(c(15, 15, 35)), lty = 2)
 This is the first iteration of this package.  So, of course, there are some known (and surely many unknown) bugs.  Some of them are as follows:
 
 - Reweighting does not currently work as intended for the non-absorbing estimation.  This, as well as other portions of the non-absorbing estimation, are still being worked on.
-- Pooling the effect across post-periods does not always work as intended when using controls or outcome lags as regressors.
+- Pooling the effect across post-periods does not always work as intended when using controls or outcome lags as regressors. **This has been fixed in Version 0.2.0.**
 
 Please direct any questions or comments to [Alex](mailto:alex.cardazzi@gmail.com) and all complaints to [Zach](mailto:zachary.porreca@unibocconi.it).

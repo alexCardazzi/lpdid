@@ -242,11 +242,11 @@ lpdid <- function(df, window = c(NA, NA), y,
     reweight <- FALSE
     message("Note: reweighting does not currently work for the non-absorbing estimation.")
   }
-  if(pooled & (outcome_lags > 0 | !is.null(controls))){
-
-    pooled <- FALSE
-    message("Note: pooled does not currently work with controls (or outcome lags).")
-  }
+  # if(pooled & (outcome_lags > 0 | !is.null(controls))){
+  #
+  #   pooled <- FALSE
+  #   message("Note: pooled does not currently work with controls (or outcome lags).")
+  # }
 
   # Convert df to pdata.frame
   if(!inherits(df, "pdata.frame")) df <- pdata.frame(df, index=c(unit_index,time_index), drop.index=FALSE, row.names=FALSE)
@@ -283,7 +283,8 @@ lpdid <- function(df, window = c(NA, NA), y,
   lpdid_betaz <- rep(0, length(-pre_window:post_window))
   lpdid_sez <- rep(0, length(-pre_window:post_window))
 
-  for(j in 0:max(post_window, pre_window)){
+  if(pooled) loop_bound <- 0 else loop_bound <- max(post_window, pre_window)
+  for(j in 0:loop_bound){
 
     # Calculate weights for j
     if(reweight){
@@ -293,12 +294,7 @@ lpdid <- function(df, window = c(NA, NA), y,
     }
 
     # Calculate Pooled
-    if(pooled & j == 0){
-
-      lim <- df[,rel_time] %in% 0:post_window
-      g <- aggregate(df[lim,y], list(df[lim,unit_index]), mean)
-      df[,y] <- ifelse(df[,rel_time] >=0, g$x[match(df[,unit_index], g$Group.1)], df[,y])
-    }
+    if(pooled & j == 0) df[,y] <- pooled_adjustment(df, y, post_window)
 
     # Post
     if(j <= post_window){
