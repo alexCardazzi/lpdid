@@ -42,12 +42,10 @@ pooled_adjustment <- function(df, y, pool_lead){
 #' @param time_index The variable indicating calendar time.
 #' @return Regression weights for the post-treatment horizon periods.
 #' @noRd
-get_weights <- function(df, j, time_index){
+get_weights <- function(df, j, time_index, lim){
 
   df[,paste0("group_h", j)] <- NA
-  df[,paste0("group_h", j)] <- ifelse(df$treat_diff==1 | lead(df$treat, j) == 0, df[,time_index], df[,paste0("group_h", j)])
-
-  lim <- !is.na(df$treat_diff) & !is.na(lead(df$treat, j)) & (df$treat_diff == 1 | lead(df$treat, j) == 0)
+  df[,paste0("group_h", j)] <- ifelse(lim, df[,time_index], df[,paste0("group_h", j)])
 
   frmla <- as.formula(paste0("treat_diff ~ 1 | ", time_index))
   tmp <- feols(frmla, data = df[lim,])
@@ -57,7 +55,7 @@ get_weights <- function(df, j, time_index){
   df[is.na(df$treat_diff) | df$treat_diff == 0,paste0("num_weights_", j)] <- NA
   den_weights = sum(df[,paste0("num_weights_", j)], na.rm = T)
   df[,paste0("weight_", j)] <- df[,paste0("num_weights_", j)] / den_weights
-  df[,paste0("gweight_", j)] <- ave(df[,paste0("weight_", j)], df[,paste0("group_h", j)], FUN = function(x) max(x, na.rm = TRUE))
+  suppressWarnings(df[,paste0("gweight_", j)] <- ave(df[,paste0("weight_", j)], df[,paste0("group_h", j)], FUN = function(x) max(x, na.rm = TRUE)))
 
   lim <- is.na(df[,paste0("weight_", j)])
   df[lim,paste0("weight_", j)] <- df[lim,paste0("gweight_", j)]
@@ -221,8 +219,8 @@ genr_sim_data <- function(exogenous_timing = TRUE, seed = 757){
 #'  Using this option requires a different variable than "rel_time".  More details can be seen in "nonabsorbing_treatment_status".
 #' @param nonabsorbing_lag Sets the number of periods after which dynamic effects stabilize.
 #' @param nonabsorbing_treat_status The name of the column that denotes treatment status.
-#'  This vector must take on a value of 1 when the unit is treated and dynamics are still in play and zero otherwise.
-#'  As an example, in a state-year panel, if a state is treated in 1990 and 2010, and dynamics settle after 5 years, the state should have 1's for 1990-1994 and 2010-2014 and zeros elsewhere. This values of this variable are extremely case specific.
+#'  This vector should take on a value of 1 for each time the unit is treated.
+#'  As an example, in a state-year panel, if a state is treated in 1990 and 2010, the state should have 1's for 1990 and 2010 only.  All other year observations of this variable for this unit should be equal to 0.
 #' @return A list including a coefficient table and window vector.
 #' @export
 lpdid <- function(df, window = c(NA, NA), y,
@@ -237,11 +235,12 @@ lpdid <- function(df, window = c(NA, NA), y,
                   nonabsorbing_treat_status = ""){
 
   pre_window <- -1*window[1]; post_window <- window[2]
-  if(nonabsorbing & reweight){
 
-    reweight <- FALSE
-    message("Note: reweighting does not currently work for the non-absorbing estimation.")
-  }
+  # if(nonabsorbing & reweight){
+  #
+  #   reweight <- FALSE
+  #   message("Note: reweighting does not currently work for the non-absorbing estimation.")
+  # }
   # if(pooled & (outcome_lags > 0 | !is.null(controls))){
   #
   #   pooled <- FALSE
@@ -250,6 +249,7 @@ lpdid <- function(df, window = c(NA, NA), y,
 
   # Convert df to pdata.frame
   if(!inherits(df, "pdata.frame")) df <- pdata.frame(df, index=c(unit_index,time_index), drop.index=FALSE, row.names=FALSE)
+  df[,unit_index] <- as.character(df[,unit_index]); df[,time_index] <- as.numeric(df[,time_index])
 
   # Calculate Pre-Mean Differences
   if(pmd){
@@ -260,15 +260,35 @@ lpdid <- function(df, window = c(NA, NA), y,
     df$the_lag <- lag(df[,y], 1)
   }
 
-  # Decide on "treat" variable
-  if(!nonabsorbing){
+  if(nonabsorbing){
 
-    df$treat <- ifelse(df[,rel_time] >= 0, 1, 0)
-  } else {
+    # create "rel_time" variable for nonabsorbing
+    rel_time <- "rel_time"
+    df[,rel_time] <- NA
+    for(i in unique(df[,unit_index])){
 
-    df$treat <- df[,nonabsorbing_treat_status]
+      id_logic <- which(df[,unit_index] == i)
+      valz <- df[id_logic[df[id_logic, nonabsorbing_treat_status] == 1], time_index]
+      if(!is.na(valz[1])){
+
+        mat <- matrix(NA, ncol = length(valz), nrow = length(id_logic))
+
+        for(j in valz){
+
+          mat[,which(j == valz)] <- df[id_logic, time_index] - j
+        }
+
+        df[id_logic, rel_time] <- apply(mat, 1, function(x) x[which(abs(x) == min(abs(x)))[1]])
+      } else {
+
+        df[id_logic, rel_time] <- -1000
+      }
+    }
   }
+
+  df$treat <- ifelse(df[,rel_time] >= 0, 1, 0)
   df$treat_diff <- df$treat - lag(df$treat, 1)
+  df$treat_diff <- ifelse(df$treat_diff < 0, 0, df$treat_diff)
 
   # Calculate lags of the outcome
   if(outcome_lags>0){
@@ -282,19 +302,16 @@ lpdid <- function(df, window = c(NA, NA), y,
 
   lpdid_betaz <- rep(0, length(-pre_window:post_window))
   lpdid_sez <- rep(0, length(-pre_window:post_window))
+  lpdid_nz <- rep(0, length(-pre_window:post_window))
 
   if(pooled) loop_bound <- 0 else loop_bound <- max(post_window, pre_window)
+  # j<-2
   for(j in 0:loop_bound){
-
-    # Calculate weights for j
-    if(reweight){
-
-      df$reweight_use <- get_weights(df = df, j = j, time_index = time_index)
-      if(j == 0) df$reweight_0 <- df$reweight_use
-    }
 
     # Calculate Pooled
     if(pooled & j == 0) df[,y] <- pooled_adjustment(df, y, post_window)
+
+    if(!reweight) df$reweight_0 <- df$reweight_use <- 1
 
     # Post
     if(j <= post_window){
@@ -305,26 +322,35 @@ lpdid <- function(df, window = c(NA, NA), y,
       if(!is.null(controls)) controls <- paste0(" + ", paste(controls, collapse = " + "))
       frmla <- as.formula(paste0("Dy ~ treat_diff", controls, " | ", time_index))
       df$cluster_var <- df[,unit_index]
-      if(!reweight) df$reweight_use <- 1
 
       # Create "Limit"
       if(!nonabsorbing){
 
         lim <- !is.na(df[,"Dy"]) & !is.na(df$treat_diff) & !is.na(lead(df$treat, j)) & (df$treat_diff == 1 | lead(df$treat, j) == 0)
         if(composition_correction) lim <- !is.na(df[,"Dy"]) & !is.na(df$treat_diff) & !is.na(lead(df$treat, j)) & (df$treat_diff == 1 | lead(df$treat, post_window) == 0) & (is.na(df$treat_date) | (df$treat_date < max(df[,time_index]) - post_window))
-        lim <- lim & df$reweight_use > 0
       } else {
 
         ## Non-Absorbing Limit
         lim_ctrl <- TRUE; lim_treat <- TRUE
         for(i in -nonabsorbing_lag:j){
 
-          lim_ctrl <- lim_ctrl & lag(df[,nonabsorbing_treat_status] - lag(df[,nonabsorbing_treat_status], 1), i) == 0
-          lim_treat <- lim_treat & if(i >= 0) lead(df[,nonabsorbing_treat_status], i) == 1 else lag(df[,nonabsorbing_treat_status], -i) == 0
+          lim_ctrl <- lim_ctrl & lag(df$treat_diff, -i) == 0
+          lim_treat <- lim_treat & if(i >= 0) lead(df$treat, i) == 1 else lag(df$treat, -i) == 0
         }
-        lim <- lim_ctrl | lim_treat & df$reweight_use > 0
-        lim <- !is.na(lim) & lim
+        df$lim_c <- ifelse(lim_ctrl, 1, 0)
+        df$lim_t <- ifelse(lim_treat, 1, 0)
+        lim <- lim_ctrl | lim_treat# & df$reweight_use > 0
       }
+      lim <- !is.na(lim) & lim
+
+      # Calculate weights for j
+      if(reweight){
+
+        df$reweight_use <- get_weights(df = df, j = j, time_index = time_index, lim = lim)
+        if(j == 0) df$reweight_0 <- df$reweight_use
+      }
+
+      lim <- lim & df$reweight_use > 0
 
       # Check for perfect multi-colinearity
       if(sum(lim) > 0 && sum(!aggregate(df$treat_diff[lim], list(df[lim, time_index]), mean)$x %in% c(0, 1))){
@@ -333,10 +359,12 @@ lpdid <- function(df, window = c(NA, NA), y,
         tmp <- suppressMessages(feols(frmla, data = df[lim,], cluster = ~cluster_var, weights = ~reweight_use))
         lpdid_betaz[match(j, -pre_window:post_window)] <- tmp$coeftable[1,1]
         lpdid_sez[match(j, -pre_window:post_window)] <- tmp$coeftable[1,2]
+        lpdid_nz[match(j, -pre_window:post_window)] <- nobs(tmp)
       } else {
 
         lpdid_betaz[match(j, -pre_window:post_window)] <- NA
         lpdid_sez[match(j, -pre_window:post_window)] <- NA
+        lpdid_nz[match(j, -pre_window:post_window)] <- NA
       }
     }
 
@@ -348,35 +376,36 @@ lpdid <- function(df, window = c(NA, NA), y,
       if(!is.null(controls)) controls <- paste0(" + ", paste(controls, collapse = " + "))
       frmla <- as.formula(paste0("Dy ~ treat_diff", controls, " | ", time_index))
       df$cluster_var <- df[,unit_index]
-      if(!reweight) df$reweight_0 <- 1
 
       if(!nonabsorbing){
 
         lim <- !is.na(df[,"Dy"]) & !is.na(df$treat_diff) & !is.na(df$treat) & (df$treat_diff == 1 | df$treat == 0)
         if(composition_correction) lim <- !is.na(df[,"Dy"]) & !is.na(df$treat_diff) & !is.na(df$treat) & (df$treat_diff == 1 | lead(df$treat, post_window) == 0) & (is.na(df$treat_date) | (df$treat_date < max(df[,time_index]) - post_window))
-        lim <- lim & df$reweight_0 > 0
       } else {
 
         ## Non-Absorbing Limit
         lim_ctrl <- TRUE; lim_treat <- TRUE
         for(i in -nonabsorbing_lag:j){
 
-          lim_ctrl <- lim_ctrl & lag(df[,nonabsorbing_treat_status] - lag(df[,nonabsorbing_treat_status], 1), i) == 0
-          lim_treat <- lim_treat & if(i >= 0) lead(df[,nonabsorbing_treat_status], i) == 1 else lag(df[,nonabsorbing_treat_status], -i) == 0
+          lim_ctrl <- lim_ctrl & lag(df$treat_diff, -i) == 0
+          lim_treat <- lim_treat & if(i >= 0) lead(df$treat, i) == 1 else lag(df$treat, -i) == 0
         }
-        lim <- lim_ctrl | lim_treat & df$reweight_use > 0
-        lim <- !is.na(lim) & lim
+        lim <- lim_ctrl | lim_treat
       }
+
+      lim <- !is.na(lim) & lim & df$reweight_0 > 0
 
       if(sum(lim) > 0 && sum(!aggregate(df$treat_diff[lim], list(df[lim, time_index]), mean)$x %in% c(0, 1))){
 
         suppressMessages(tmp <- feols(frmla, data = df[lim,], cluster = ~cluster_var, weights = ~reweight_0))
         lpdid_betaz[match(-j, -pre_window:post_window)] <- tmp$coeftable[1,1]
         lpdid_sez[match(-j, -pre_window:post_window)] <- tmp$coeftable[1,2]
+        lpdid_nz[match(-j, -pre_window:post_window)] <- nobs(tmp)
       } else {
 
         lpdid_betaz[match(-j, -pre_window:post_window)] <- NA
         lpdid_sez[match(-j, -pre_window:post_window)] <- NA
+        lpdid_nz[match(-j, -pre_window:post_window)] <- NA
       }
     }
   }
@@ -390,5 +419,7 @@ lpdid <- function(df, window = c(NA, NA), y,
   coeftable[,4] <- pnorm(coeftable$`t value`, lower.tail = F)
   return(list(coeftable = coeftable[!is.na(coeftable$Estimate),],
               # df = df,
-              window = c(-pre_window:post_window)[!is.na(coeftable$Estimate)]))
+              window = c(-pre_window:post_window)[!is.na(coeftable$Estimate)],
+              nobs = data.frame(window = c(-pre_window:post_window)[!is.na(coeftable$Estimate)],
+                                nobs = lpdid_nz)))
 }

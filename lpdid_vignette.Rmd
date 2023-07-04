@@ -240,23 +240,24 @@ Below, we simulate data where there are three groups.  First, there is an untrea
 
 ```{r, fig.width=7, fig.height=5, fig.align='center', warning=FALSE, message = FALSE, cache=TRUE}
 set.seed(757)
-I <- 50; T <- 50; N <- I * T; e_var <- 4
-data.frame(id = rep(1:I, each = T),
-           t = rep(1:T, I),
+rm(list = ls())
+I <- 50; bigT <- 50; N <- I * bigT; e_var <- 4
+data.frame(id = rep(1:I, each = bigT),
+           t = rep(1:bigT, I),
            e = rnorm(N, 0, e_var)) -> df
 unit_FE <- rnorm(I, 0, e_var)
-time_FE <- rnorm(T, 0, e_var)
+time_FE <- rnorm(bigT, 0, e_var)
 df$treated <- ifelse(df$id < 21, 1, 0)
-df$treat_status <- ifelse(df$id < 21 & df$t %in% 16:25, 1, 0)
-df$treat_status <- ifelse(df$id < 11 & df$t %in% 36:45, 1, df$treat_status)
-df$y <- df$e + unit_FE[df$id] + time_FE[df$t] +
-  ifelse(df$id < 11,
-         ifelse(df$t > 35, 50,
-                ifelse(df$t > 15, 15, 0)),
-         ifelse(df$id < 21,
-                ifelse(df$t > 15, 15, 0),
-                0))
-df$group <- (ave(df$treat_status, df$id)) * 5
+df$treat_status <- ifelse(df$id < 21 & df$t == 16, 1, 0)
+df$treat_status <- ifelse(df$id < 11 & df$t == 36, 1, df$treat_status)
+ifelse(df$id < 11,
+       ifelse(df$t > 35, 50,
+              ifelse(df$t > 15, 15, 0)),
+       ifelse(df$id < 21,
+              ifelse(df$t > 15, 15, 0),
+              0)) -> df$beta
+df$y <- df$e + unit_FE[df$id] + time_FE[df$t] + df$beta
+df$group <- ifelse(df$id < 11, 1, ifelse(df$id < 21, 2, 3))
 
 agg <- aggregate(df$y, list(df$t, df$group), mean)
 par(mar = c(4.1, 4.1, .1, 4.1))
@@ -264,28 +265,31 @@ plot(agg$Group.1, agg$x, col = agg$Group.2 + 1, pch = 19,
      xlab = "Time", ylab = "Outcome")
 ```
 
-Notice the differences in this function call versus the previous ones.  First, there is no ```rel_time``` arguement needed.  This is because rel_time does not necessarily make sense for a unit that is treated more than once.  Second, reweighting does not currently work when ```nonabsorbing = TRUE```.  Currently, the reweighting simply gets turned off when ```nonabsorbing = TRUE```.^[As a note, pooling with controls (or outcome lags) is also not working.]  Finally, and perhaps most importantly, notice the ```nonabsorbing_treat_status``` variable.  One must insert the name of a variable that details the treatment status of the unit at every point.  Unfortunately, this portion of the package is still under construction.  To give users an idea of what the variable must look like, consider a unit that is treated in both 1995 and 2010.  Assume that treatment dynamics last only for 5 years. Then, observations of ```nonabsorbing_treat_status``` should be:
-- 0 before 1995
-- 1 between and including 1995 to 1999
-- 0 between and including 2000 to 2009
-- 1 between and including 2010 to 2014
-- 0 after and including 2015
+Notice the difference in this function call versus the previous ones.  First, there is no ```rel_time``` argument needed.  This is because the function will generate ```rel_time``` by itself. However, you must include ```nonabsorbing = TRUE``` in addition to a ```nonabsorbing_lag``` and ```nonabsorbing_treat_status```.  ```nonabsorbing_lag``` represents the number of periods until the dynamic treatment effects stabilize.  Then, ```nonabsorbing_treat_status``` takes on values of ```1``` each time a unit gets treated.
 
 ```{r, fig.width=7, fig.height=5, fig.align='center', warning=FALSE, message = FALSE, cache=TRUE}
 lpdid(df = df, window = c(-12, 12), y = "y",
       unit_index = "id", time_index = "t",
       nonabsorbing = TRUE, nonabsorbing_lag = 5,
-      nonabsorbing_treat_status = "treat_status") -> reg
+      nonabsorbing_treat_status = "treat_status") -> reg1
+lpdid(df = df, window = c(-12, 12), y = "y",
+      unit_index = "id", time_index = "t",
+      nonabsorbing = TRUE, nonabsorbing_lag = 5,
+      nonabsorbing_treat_status = "treat_status",
+      reweight = TRUE) -> reg2
 par(mar = c(4.1, 4.1, .1, 4.1))
-plot_lpdid(reg)
+plot_lpdid(reg1, x.shift = -0.05, col = "dodgerblue")
+plot_lpdid(reg2, x.shift = 0.05, col = "tomato", add = T)
 abline(h = mean(c(15, 15, 35)), lty = 2)
+legend("topleft", legend = c("VWATT", "EWATT"), bty = "n",
+       col = c("dodgerblue", "tomato"), pch = 19)
 ```
 
 ## Under Construction
 
 This is the first iteration of this package.  So, of course, there are some known (and surely many unknown) bugs.  Some of them are as follows:
 
-- Reweighting does not currently work as intended for the non-absorbing estimation.  This, as well as other portions of the non-absorbing estimation, are still being worked on.
+- Reweighting does not currently work as intended for the non-absorbing estimation.  This, as well as other portions of the non-absorbing estimation, are still being worked on.  **This has been fixed in Version 0.3.0.**
 - Pooling the effect across post-periods does not always work as intended when using controls or outcome lags as regressors. **This has been fixed in Version 0.2.0.**
 
 Please direct any questions or comments to [Alex](mailto:alex.cardazzi@gmail.com) and all complaints to [Zach](mailto:zachary.porreca@unibocconi.it).

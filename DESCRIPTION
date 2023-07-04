@@ -1,7 +1,7 @@
 Package: lpdid
 Type: Package
 Title: Local Projections Difference-in-Differences
-Version: 0.2.0
+Version: 0.3.0
 Authors@R: 
     c(person(given = "Alexander",
              family = "Cardazzi",
