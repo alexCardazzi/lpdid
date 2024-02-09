@@ -416,7 +416,7 @@ lpdid <- function(df, window = c(NA, NA), y,
                           "Pr(>|t|)" = NA,
                           check.names = FALSE)
   if(pooled) coeftable <- coeftable[match(0, -pre_window:post_window),]
-  coeftable[,4] <- pnorm(coeftable$`t value`, lower.tail = F)
+  coeftable[,4] <- pnorm(abs(coeftable$`t value`), lower.tail = F)
   return(list(coeftable = coeftable[!is.na(coeftable$Estimate),],
               # df = df,
               window = c(-pre_window:post_window)[!is.na(coeftable$Estimate)],
