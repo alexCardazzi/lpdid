@@ -74,6 +74,7 @@ get_weights <- function(df, j, time_index, lim){
 #' @param add A boolean (TRUE or FALSE) value for whether the user wants to add to an existing figure or generate a new one.  The default is FALSE, meaning a new plot.
 #' @param xlab The text belonging on the x axis.
 #' @param ylab The text belonging on the y axis.
+#' @param ylim A vector of length two that determines the minimum and maximum of the y-axis. Default scales to fit the figure being plotted.
 #' @param main The text belonging as the figure's title.
 #' @param x.shift A numeric value that will shift the event study estimates along the x-axis.
 #' @param pch A numeric value corresponding to the point's shape.
@@ -83,7 +84,9 @@ get_weights <- function(df, j, time_index, lim){
 #' @return An event study plot.
 #' @export
 plot_lpdid <- function(reg, conf = .95, segments = TRUE, add = FALSE,
-                       xlab = NULL, ylab = NULL, main = "", x.shift = 0,
+                       xlab = NULL, ylab = NULL,
+                       ylim = NULL,
+                       main = "", x.shift = 0,
                        pch = 19, cex = 1, col = "black", opacity = 1){
 
   if(nrow(reg$coeftable) != length(reg$window)) stop("coeftable and window are not the same length.  It is likely that pooled=TRUE in the lpdid function.  An event study cannot be plotted when pooled=TRUE.")
@@ -95,9 +98,14 @@ plot_lpdid <- function(reg, conf = .95, segments = TRUE, add = FALSE,
 
   if(!add){
 
+    if(is.null(ylim)){
+
+      ylim <- c(min(lCI, na.rm = T), max(uCI, na.rm = T))
+    }
+
     plot(coeftable$t + x.shift, coeftable$Estimate, las = 1, pch = pch,
          cex = cex, main = main, col = scales::alpha(col, opacity),
-         ylim = c(min(lCI, na.rm = T), max(uCI, na.rm = T)),
+         ylim = ylim,
          xlim = range(coeftable$t, na.rm = T),
          xlab = ifelse(is.null(xlab), "Time to Treatment", xlab),
          ylab = ifelse(is.null(ylab),
@@ -207,7 +215,9 @@ genr_sim_data <- function(exogenous_timing = TRUE, seed = 757){
 #' @param time_index The name of the column that represents the calendar time.  This should be a character.
 #' @param rel_time The name of the column that contains a "time to treatment" vector.
 #'  Values for untreated units must all be negative.
-#' @param controls A vector of names of control variables to be included in the regression formula.
+#' @param cluster The name of the column by which to cluster the standard errors.  Default is the unit ID.
+#' @param controls A formula of control variables to be included in the regression formula. The form should be: `~ X1 + X2`. These controls will be time invariant.
+#' @param controls_t A formula of control variables to be included in the regression formula. The form should be: `~ X1 + X2`. These controls will be time varying.
 #' @param outcome_lags The number of outcome lags to be included in the analysis.
 #'  For an example of this, simulate endogenous data via genr_sim_data(FALSE), and include one outcome lag.
 #' @param reweight A boolean (TRUE or FALSE) value that will re-weight the regression and generate ATT rather than VWATT. The default is FALSE, which corresponds to the estimator calculating the VWATT (variance weighted average treatment effect on the treated).
@@ -225,14 +235,18 @@ genr_sim_data <- function(exogenous_timing = TRUE, seed = 757){
 #' @export
 lpdid <- function(df, window = c(NA, NA), y,
                   unit_index, time_index,
-                  rel_time = "",
-                  controls = NULL, outcome_lags = 0,
+                  rel_time = "", cluster = NULL,
+                  controls = NULL,
+                  controls_t = NULL,
+                  outcome_lags = 0,
                   reweight = FALSE,
                   pmd = FALSE, pmd_lag,
                   composition_correction = FALSE,
                   pooled = FALSE,
                   nonabsorbing = FALSE, nonabsorbing_lag,
                   nonabsorbing_treat_status = ""){
+
+  if(is.null(cluster)) cluster <- unit_index
 
   pre_window <- -1*window[1]; post_window <- window[2]
 
@@ -290,14 +304,32 @@ lpdid <- function(df, window = c(NA, NA), y,
   df$treat_diff <- df$treat - lag(df$treat, 1)
   df$treat_diff <- ifelse(df$treat_diff < 0, 0, df$treat_diff)
 
+  # ## Insert Controls here...
+  # controls <- ~ a + b
+  # ## Insert Time-Varying Controls here...
+  # controls_t <- ~ x + y + z
+
+  controls <- as.character(controls)[2]
+  controls_t <- as.character(controls_t)[2]
+
+  if(grepl("\\|", controls) | grepl("\\|", controls_t)){
+
+    stop("Fixed effects detected in controls and/or controls_t arguments. This version of code does not handle FEs.")
+  }
+
+  controls <- strsplit(controls, "\\s*\\+\\s*")[[1]]
+  controls_t <- strsplit(controls_t, "\\s*\\+\\s*")[[1]]
+
+
   # Calculate lags of the outcome
+  lagz <- c()
   if(outcome_lags>0){
 
     for(outcome_lag in 1:outcome_lags){
 
       df[,paste0("y_diff_lag", outcome_lag)] <- lag(df[,y] - lag(df[,y], 1), outcome_lag)
     }
-    controls <- c(controls, colnames(df)[grepl("y_diff_lag.", colnames(df))])
+    lagz <- c(lagz, colnames(df)[grepl("y_diff_lag.", colnames(df))])
   }
 
   lpdid_betaz <- rep(0, length(-pre_window:post_window))
@@ -318,10 +350,29 @@ lpdid <- function(df, window = c(NA, NA), y,
 
       df$Dy <- lead(df[,y], j) - df$the_lag
 
-      # Create Formula
-      if(!is.null(controls)) controls <- paste0(" + ", paste(controls, collapse = " + "))
-      frmla <- as.formula(paste0("Dy ~ treat_diff", controls, " | ", time_index))
-      df$cluster_var <- df[,unit_index]
+      # # Create Formula
+      # if(!is.null(controls)) controls <- paste0(" + ", paste(controls, collapse = " + "))
+      # frmla <- as.formula(paste0("Dy ~ treat_diff", controls, " | ", time_index))
+
+      frmla <- "Dy ~ treat_diff"
+      if(!is.null(lagz[1])) lagz <- paste(lagz, collapse = " + ")
+      if(!is.null(lagz[1])) frmla <- paste0(frmla, " + ", lagz)
+      if(!is.na(controls[1])) controls_use <- paste(controls, collapse = " + ")
+      if(!is.na(controls[1])) frmla <- paste(frmla, "+", paste(controls, collapse = " + "))
+
+      if(!is.na(controls_t[1])){
+
+        for(ctrl in controls_t){
+
+          df[,paste0(ctrl, ".l")] <- lead(df[,ctrl], j)
+        }
+
+        controls_t <- paste0(controls_t, ".l")
+        frmla <- paste0(frmla, " + ", paste(controls_t, collapse = " + "))
+      }
+      frmla <- as.formula(paste0(frmla, " | ", time_index))
+
+      df$cluster_var <- df[,cluster]
 
       # Create "Limit"
       if(!nonabsorbing){
@@ -373,8 +424,27 @@ lpdid <- function(df, window = c(NA, NA), y,
 
       df$Dy <- lag(df[,y], j) - df$the_lag
 
-      if(!is.null(controls)) controls <- paste0(" + ", paste(controls, collapse = " + "))
-      frmla <- as.formula(paste0("Dy ~ treat_diff", controls, " | ", time_index))
+      # if(!is.null(controls)) controls <- paste0(" + ", paste(controls, collapse = " + "))
+      # frmla <- as.formula(paste0("Dy ~ treat_diff", controls, " | ", time_index))
+
+      frmla <- "Dy ~ treat_diff"
+      if(!is.null(lagz[1])) lagz <- paste(lagz, collapse = " + ")
+      if(!is.null(lagz[1])) frmla <- paste0(frmla, " + ", lagz)
+      if(!is.na(controls[1])) controls_use <- paste(controls, collapse = " + ")
+      if(!is.na(controls[1])) frmla <- paste(frmla, "+", paste(controls, collapse = " + "))
+
+      if(!is.na(controls_t[1])){
+
+        for(ctrl in controls_t){
+
+          df[,paste0(ctrl, ".l")] <- lag(df[,ctrl], j)
+        }
+
+        controls_t <- paste0(controls_t, ".l")
+        frmla <- paste0(frmla, " + ", paste(controls_t, collapse = " + "))
+      }
+      frmla <- as.formula(paste0(frmla, " | ", time_index))
+
       df$cluster_var <- df[,unit_index]
 
       if(!nonabsorbing){

@@ -291,5 +291,9 @@ This is the first iteration of this package.  So, of course, there are some know
 
 - Reweighting does not currently work as intended for the non-absorbing estimation.  This, as well as other portions of the non-absorbing estimation, are still being worked on.  **This has been fixed in Version 0.3.0.**
 - Pooling the effect across post-periods does not always work as intended when using controls or outcome lags as regressors. **This has been fixed in Version 0.2.0.**
+- **Version 0.4.0** has been updated to:
+    - Fix a bug that caused too-large p-values when effects were negative
+    - Change the way controls are input into the function. Now, you should use *formulas* instead of character vectors to supply controls. In addition, controls can be time invariant or time varying.
+    - Allow the user to specify the level of clustering.
 
 Please direct any questions or comments to [Alex](mailto:alex.cardazzi@gmail.com) and all complaints to [Zach](mailto:zachary.porreca@unibocconi.it).
