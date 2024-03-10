@@ -11,6 +11,7 @@ plot_lpdid(
   add = FALSE,
   xlab = NULL,
   ylab = NULL,
+  ylim = NULL,
   main = "",
   x.shift = 0,
   pch = 19,
@@ -31,6 +32,8 @@ plot_lpdid(
 \item{xlab}{The text belonging on the x axis.}
 
 \item{ylab}{The text belonging on the y axis.}
+
+\item{ylim}{A vector of length two that determines the minimum and maximum of the y-axis. Default scales to fit the figure being plotted.}
 
 \item{main}{The text belonging as the figure's title.}
 
