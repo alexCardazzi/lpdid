@@ -445,7 +445,7 @@ lpdid <- function(df, window = c(NA, NA), y,
       }
       frmla <- as.formula(paste0(frmla, " | ", time_index))
 
-      df$cluster_var <- df[,unit_index]
+      df$cluster_var <- df[,cluster]
 
       if(!nonabsorbing){
 
