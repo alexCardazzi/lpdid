@@ -367,8 +367,8 @@ lpdid <- function(df, window = c(NA, NA), y,
           df[,paste0(ctrl, ".l")] <- lead(df[,ctrl], j)
         }
 
-        controls_t <- paste0(controls_t, ".l")
-        frmla <- paste0(frmla, " + ", paste(controls_t, collapse = " + "))
+        controls_t_use <- paste0(controls_t, ".l")
+        frmla <- paste0(frmla, " + ", paste(controls_t_use, collapse = " + "))
       }
       frmla <- as.formula(paste0(frmla, " | ", time_index))
 
@@ -440,8 +440,8 @@ lpdid <- function(df, window = c(NA, NA), y,
           df[,paste0(ctrl, ".l")] <- lag(df[,ctrl], j)
         }
 
-        controls_t <- paste0(controls_t, ".l")
-        frmla <- paste0(frmla, " + ", paste(controls_t, collapse = " + "))
+        controls_t_use <- paste0(controls_t, ".l")
+        frmla <- paste0(frmla, " + ", paste(controls_t_use, collapse = " + "))
       }
       frmla <- as.formula(paste0(frmla, " | ", time_index))
 
