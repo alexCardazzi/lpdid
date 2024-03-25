@@ -420,7 +420,7 @@ lpdid <- function(df, window = c(NA, NA), y,
     }
 
     # Pre
-    if(j>1 & j<=pre_window){
+    if((j>1 & j<=pre_window) || (pmd & j<=pre_window)){
 
       df$Dy <- lag(df[,y], j) - df$the_lag
 
