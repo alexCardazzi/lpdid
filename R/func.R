@@ -211,13 +211,14 @@ genr_sim_data <- function(exogenous_timing = TRUE, seed = 757){
 #' @param window A vector of length two that denotes the length of the pre- and post-periods.
 #'  The first number, denoting the number of pre-periods before treamtent, should be negative and second, denoting the number of post periods after treatment, should be positive.
 #' @param y The outcome variable.  This should be input as a character, the name of the outcome variable in the data.
+#' @param treat_status The name of the column that denotes treatment status.
+#'  This vector should take on a value of 1 for each time the unit is treated.
+#'  As an example, in a state-year panel, if a state is treated in 1990 and 2010, the state should have 1's for 1990 and 2010 only.  All other year observations of this variable for this unit should be equal to 0.
 #' @param unit_index The name of the column that represents the unit ID.  This should be a character.
 #' @param time_index The name of the column that represents the calendar time.  This should be a character.
-#' @param rel_time The name of the column that contains a "time to treatment" vector.
-#'  Values for untreated units must all be negative.
 #' @param cluster The name of the column by which to cluster the standard errors.  Default is the unit ID.
-#' @param controls A formula of control variables to be included in the regression formula. The form should be: `~ X1 + X2`. These controls will be time invariant.
-#' @param controls_t A formula of control variables to be included in the regression formula. The form should be: `~ X1 + X2`. These controls will be time varying.
+#' @param controls A formula of control variables to be included in the regression formula. The form should be: `~ X1 + X2 | FE1 + FE2`. These controls will be time invariant.
+#' @param controls_t A formula of control variables to be included in the regression formula. The form should be: `~ X1 + X2 | FE1 + FE2`. These controls will be time varying.
 #' @param outcome_lags The number of outcome lags to be included in the analysis.
 #'  For an example of this, simulate endogenous data via genr_sim_data(FALSE), and include one outcome lag.
 #' @param reweight A boolean (TRUE or FALSE) value that will re-weight the regression and generate ATT rather than VWATT. The default is FALSE, which corresponds to the estimator calculating the VWATT (variance weighted average treatment effect on the treated).
@@ -225,17 +226,14 @@ genr_sim_data <- function(exogenous_timing = TRUE, seed = 757){
 #' @param pmd_lag The number of pre-treatment periods to include in taking the mean.
 #' @param composition_correction A boolean value that will remove later-treated observations from the control group even before they are treated.  See Section 2.10 "Composition effects".
 #' @param pooled A boolean value (TRUE or FALSE) that, if equal to TRUE, will calculate the treatment effect pooled over all post-periods.
-#' @param nonabsorbing A boolean value (TRUE or FALSE) that, if equal to TRUE, will preform a routine similar to "stacking".
-#'  Using this option requires a different variable than "rel_time".  More details can be seen in "nonabsorbing_treatment_status".
-#' @param nonabsorbing_lag Sets the number of periods after which dynamic effects stabilize.
-#' @param nonabsorbing_treat_status The name of the column that denotes treatment status.
-#'  This vector should take on a value of 1 for each time the unit is treated.
-#'  As an example, in a state-year panel, if a state is treated in 1990 and 2010, the state should have 1's for 1990 and 2010 only.  All other year observations of this variable for this unit should be equal to 0.
+#' @param nonabsorbing_lag Sets the number of periods after which dynamic effects stabilize. This number must be greater than zero, and will indicate to the function that you'd like to estimate a nonabsorbing treatment effect.
+
 #' @return A list including a coefficient table and window vector.
 #' @export
 lpdid <- function(df, window = c(NA, NA), y,
                   unit_index, time_index,
-                  rel_time = "", cluster = NULL,
+                  treat_status = "",
+                  cluster = NULL,
                   controls = NULL,
                   controls_t = NULL,
                   outcome_lags = 0,
@@ -243,23 +241,11 @@ lpdid <- function(df, window = c(NA, NA), y,
                   pmd = FALSE, pmd_lag,
                   composition_correction = FALSE,
                   pooled = FALSE,
-                  nonabsorbing = FALSE, nonabsorbing_lag,
-                  nonabsorbing_treat_status = ""){
+                  nonabsorbing_lag = NULL){
 
   if(is.null(cluster)) cluster <- unit_index
 
   pre_window <- -1*window[1]; post_window <- window[2]
-
-  # if(nonabsorbing & reweight){
-  #
-  #   reweight <- FALSE
-  #   message("Note: reweighting does not currently work for the non-absorbing estimation.")
-  # }
-  # if(pooled & (outcome_lags > 0 | !is.null(controls))){
-  #
-  #   pooled <- FALSE
-  #   message("Note: pooled does not currently work with controls (or outcome lags).")
-  # }
 
   # Convert df to pdata.frame
   if(!inherits(df, "pdata.frame")) df <- pdata.frame(df, index=c(unit_index,time_index), drop.index=FALSE, row.names=FALSE)
@@ -274,29 +260,29 @@ lpdid <- function(df, window = c(NA, NA), y,
     df$the_lag <- lag(df[,y], 1)
   }
 
-  if(nonabsorbing){
+  nonabsorbing <- F
+  if(is.null(nonabsorbing_lag)) nonabsorbing_lag <- Inf else nonabsorbing <- T
 
-    # create "rel_time" variable for nonabsorbing
-    rel_time <- "rel_time"
-    df[,rel_time] <- NA
-    for(i in unique(df[,unit_index])){
+  # create "rel_time" variable for nonabsorbing
+  rel_time <- "rel_time"
+  df[,rel_time] <- NA
+  for(i in unique(df[,unit_index])){
 
-      id_logic <- which(df[,unit_index] == i)
-      valz <- df[id_logic[df[id_logic, nonabsorbing_treat_status] == 1], time_index]
-      if(!is.na(valz[1])){
+    id_logic <- which(df[,unit_index] == i)
+    valz <- df[id_logic[df[id_logic, treat_status] == 1], time_index]
+    if(!is.na(valz[1])){
 
-        mat <- matrix(NA, ncol = length(valz), nrow = length(id_logic))
+      mat <- matrix(NA, ncol = length(valz), nrow = length(id_logic))
 
-        for(j in valz){
+      for(j in valz){
 
-          mat[,which(j == valz)] <- df[id_logic, time_index] - j
-        }
-
-        df[id_logic, rel_time] <- apply(mat, 1, function(x) x[which(abs(x) == min(abs(x)))[1]])
-      } else {
-
-        df[id_logic, rel_time] <- -1000
+        mat[,which(j == valz)] <- df[id_logic, time_index] - j
       }
+
+      df[id_logic, rel_time] <- apply(mat, 1, function(x) x[which(abs(x) == min(abs(x)))[1]])
+    } else {
+
+      df[id_logic, rel_time] <- -1000
     }
   }
 
@@ -305,21 +291,32 @@ lpdid <- function(df, window = c(NA, NA), y,
   df$treat_diff <- ifelse(df$treat_diff < 0, 0, df$treat_diff)
 
   # ## Insert Controls here...
-  # controls <- ~ a + b
+  # controls <- ~ a + b | DV3
   # ## Insert Time-Varying Controls here...
   # controls_t <- ~ x + y + z
+  # controls_t <- ~ x + y + z | FE1 + FE2
 
   controls <- as.character(controls)[2]
   controls_t <- as.character(controls_t)[2]
 
-  if(grepl("\\|", controls) | grepl("\\|", controls_t)){
+  controls <- strsplit(controls, "\\s*\\|\\s*")[[1]]
+  if(length(controls) > 2 | length(controls_t) > 2) stop("An unexpected number of vertical bars included in one of the controls arguments.")
 
-    stop("Fixed effects detected in controls and/or controls_t arguments. This version of code does not handle FEs.")
+  if(length(controls) == 2){
+
+    FE <- controls[2]
+    controls <- controls[1]
+  }
+
+  controls_t <- strsplit(controls_t, "\\s*\\|\\s*")[[1]]
+  if(length(controls_t) == 2){
+
+    FE <- c(FE, controls_t[2])
+    controls_t <- controls_t[1]
   }
 
   controls <- strsplit(controls, "\\s*\\+\\s*")[[1]]
   controls_t <- strsplit(controls_t, "\\s*\\+\\s*")[[1]]
-
 
   # Calculate lags of the outcome
   lagz <- c()
@@ -370,7 +367,8 @@ lpdid <- function(df, window = c(NA, NA), y,
         controls_t_use <- paste0(controls_t, ".l")
         frmla <- paste0(frmla, " + ", paste(controls_t_use, collapse = " + "))
       }
-      frmla <- as.formula(paste0(frmla, " | ", time_index))
+
+      frmla <- as.formula(paste0(frmla, " | ", time_index, " + ", paste(unlist(strsplit(FE, "\\s*\\+\\s*")), collapse = " + ")))
 
       df$cluster_var <- df[,cluster]
 
@@ -443,7 +441,8 @@ lpdid <- function(df, window = c(NA, NA), y,
         controls_t_use <- paste0(controls_t, ".l")
         frmla <- paste0(frmla, " + ", paste(controls_t_use, collapse = " + "))
       }
-      frmla <- as.formula(paste0(frmla, " | ", time_index))
+
+      frmla <- as.formula(paste0(frmla, " | ", time_index, " + ", paste(unlist(strsplit(FE, "\\s*\\+\\s*")), collapse = " + ")))
 
       df$cluster_var <- df[,cluster]
 
