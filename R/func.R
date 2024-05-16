@@ -164,6 +164,7 @@ genr_sim_data <- function(exogenous_timing = TRUE, seed = 757){
     treat_datez <- seq(11, 27, by = 2)
 
     df$treat_date <- treat_datez[groupz[df$i]]
+    df$treat_status <- ifelse(is.na(df$treat_date), 0, ifelse(df$t == df$treat_date, 1, 0))
     df$ever_treat <- ifelse(!is.na(df$treat_date), 1, 0)
     df$rel_time <- ifelse(df$ever_treat == 1, df$t - df$treat_date, df$t - (max(df$t) + 1))
 
@@ -190,6 +191,7 @@ genr_sim_data <- function(exogenous_timing = TRUE, seed = 757){
     treat_datez <- sort(unique(g$x))
 
     df$treat_date <- g$x[match(df$i, g$Group.2)]
+    df$treat_status <- ifelse(is.na(df$treat_date), 0, ifelse(df$t == df$treat_date, 1, 0))
     df$ever_treat <- ifelse(!is.na(df$treat_date), 1, 0)
     df$rel_time <- ifelse(df$ever_treat == 1, df$t - df$treat_date, df$t - (max(df$t) + 1))
 
@@ -247,6 +249,17 @@ lpdid <- function(df, window = c(NA, NA), y,
 
   pre_window <- -1*window[1]; post_window <- window[2]
 
+  # if(nonabsorbing & reweight){
+  #
+  #   reweight <- FALSE
+  #   message("Note: reweighting does not currently work for the non-absorbing estimation.")
+  # }
+  # if(pooled & (outcome_lags > 0 | !is.null(controls))){
+  #
+  #   pooled <- FALSE
+  #   message("Note: pooled does not currently work with controls (or outcome lags).")
+  # }
+
   # Convert df to pdata.frame
   if(!inherits(df, "pdata.frame")) df <- pdata.frame(df, index=c(unit_index,time_index), drop.index=FALSE, row.names=FALSE)
   df[,unit_index] <- as.character(df[,unit_index]); df[,time_index] <- as.numeric(df[,time_index])
@@ -302,6 +315,7 @@ lpdid <- function(df, window = c(NA, NA), y,
   controls <- strsplit(controls, "\\s*\\|\\s*")[[1]]
   if(length(controls) > 2 | length(controls_t) > 2) stop("An unexpected number of vertical bars included in one of the controls arguments.")
 
+  FE <- NULL
   if(length(controls) == 2){
 
     FE <- controls[2]
@@ -311,7 +325,7 @@ lpdid <- function(df, window = c(NA, NA), y,
   controls_t <- strsplit(controls_t, "\\s*\\|\\s*")[[1]]
   if(length(controls_t) == 2){
 
-    FE <- c(FE, controls_t[2])
+    if(is.null(FE)) FE <- controls_t[2] else FE <- c(FE, controls_t[2])
     controls_t <- controls_t[1]
   }
 
@@ -368,7 +382,12 @@ lpdid <- function(df, window = c(NA, NA), y,
         frmla <- paste0(frmla, " + ", paste(controls_t_use, collapse = " + "))
       }
 
-      frmla <- as.formula(paste0(frmla, " | ", time_index, " + ", paste(unlist(strsplit(FE, "\\s*\\+\\s*")), collapse = " + ")))
+      if(!is.null(FE)){
+        rhs <- paste(time_index, " + ", paste(unlist(strsplit(FE, "\\s*\\+\\s*")), collapse = " + "))
+      } else {
+        rhs <- time_index
+      }
+      frmla <- as.formula(paste0(frmla, " | ", rhs))
 
       df$cluster_var <- df[,cluster]
 
@@ -442,7 +461,12 @@ lpdid <- function(df, window = c(NA, NA), y,
         frmla <- paste0(frmla, " + ", paste(controls_t_use, collapse = " + "))
       }
 
-      frmla <- as.formula(paste0(frmla, " | ", time_index, " + ", paste(unlist(strsplit(FE, "\\s*\\+\\s*")), collapse = " + ")))
+      if(!is.null(FE)){
+        rhs <- paste(time_index, " + ", paste(unlist(strsplit(FE, "\\s*\\+\\s*")), collapse = " + "))
+      } else {
+        rhs <- time_index
+      }
+      frmla <- as.formula(paste0(frmla, " | ", rhs))
 
       df$cluster_var <- df[,cluster]
 
@@ -489,6 +513,6 @@ lpdid <- function(df, window = c(NA, NA), y,
   return(list(coeftable = coeftable[!is.na(coeftable$Estimate),],
               # df = df,
               window = c(-pre_window:post_window)[!is.na(coeftable$Estimate)],
-              nobs = data.frame(window = c(-pre_window:post_window)[!is.na(coeftable$Estimate)],
+              nobs = data.frame(window = c(-pre_window:post_window),
                                 nobs = lpdid_nz)))
 }

@@ -49,6 +49,7 @@ unit_FE <- rnorm(I, 0, 4)
 time_FE <- rnorm(T, 0, 4)
 df$treated <- ifelse(df$id < 21, 1, 0)
 df$time_til <- ifelse(df$treated == 1, df$t - 30, -1)
+df$treat_status <- ifelse(df$treated == 1 & df$t == 30, 1, 0)
 df$y <- df$e + unit_FE[df$id] + time_FE[df$t] + ifelse(df$id < 21 & df$t > 30, df$t - 30, 0)
 aggregate(df$y, list(df$t, df$treated), mean) -> tmp
 par(mar = c(4.1, 4.1, .1, 4.1))
@@ -65,12 +66,12 @@ In the most simple of cases, LP-DiD and TWFE preform very similarly.  Of course,
 - ```y```: The name of the outcome variable.
 - ```unit_index```, ```time_index```: unit and time indices.  For example, if the data
 is state-by-year, this is where you would input these names.
-- ```rel_time```: This is the relative time variable.  **For untreated units, this must be negative.**
+- ```treat_status```: This should be a vector equal to one for the time period a unit is treated. Never-treated units will have all zeros for this vector. 
 
 ```{r, fig.width=7, fig.height=5, fig.align='center', cache=TRUE}
 lpdid(df, window = c(-20, 20), y = "y",
       unit_index = "id", time_index = "t",
-      rel_time = "time_til") -> reg
+      treat_status = "treat_status") -> reg
 feols(y ~ i(time_til, treated, -1) | id + t, data = df) -> twfe
 
 par(mar = c(4.1, 4.1, .1, 4.1))
@@ -93,7 +94,7 @@ twfe1 <- feols(y ~ i(rel_time, ever_treat, -1) | i + t, data = df)
 
 lpdid1 <- lpdid(df, window = c(-5, 10), y = "y",
                 unit_index = "i", time_index = "t",
-                rel_time = "rel_time")
+                treat_status = "treat_status")
 
 par(mar = c(4.1, 4.1, .1, 4.1))
 plot_lpdid(lpdid1, col = "tomato", x.shift = 0.1)
@@ -115,9 +116,9 @@ df$lag_y <- lag(df$y, 1)
 twfe0 <- feols(y ~ i(rel_time, ever_treat, -1) | i + t, data = df)
 twfe1 <- feols(y ~ lag_y + i(rel_time, ever_treat, -1) | i + t, data = df)
 lpdid0 <- lpdid(df, window = c(-5, 10), y = "y", outcome_lags = 0,
-                unit_index = "i", time_index = "t", rel_time = "rel_time")
+                unit_index = "i", time_index = "t", treat_status = "treat_status")
 lpdid1 <- lpdid(df, window = c(-5, 10), y = "y", outcome_lags = 1,
-                unit_index = "i", time_index = "t", rel_time = "rel_time")
+                unit_index = "i", time_index = "t", treat_status = "treat_status")
 par(mar = c(4.1, 4.1, .1, 4.1))
 plot_lpdid(lpdid0, col = "tomato", x.shift = 0.1)
 plot_lpdid(lpdid1, col = "dodgerblue", x.shift = 0.1, add = TRUE)
@@ -168,6 +169,7 @@ Andrew Baker created a simulated data (found [here](https://github.com/scunning1
 ```{r, fig.width=7, fig.height=5, fig.align='center', warning=FALSE, cache=TRUE}
 baker <- haven::read_dta('https://github.com/scunning1975/mixtape/raw/master/baker.dta')
 baker$treated <- ifelse(baker$treat_date > 0, 1, 0)
+baker$treat_status <- ifelse(baker$treat_date == baker$year, 1, 0)
 
 tmp <- aggregate(list(y = baker$y),
                  list(year = baker$year,
@@ -211,7 +213,7 @@ res_cohort = feols(y ~ sunab(treat_date, year) | id + year,
 
 lpdid(df = baker, window = c(-20, 20), y = "y",
       unit_index = "id", time_index = "year",
-      rel_time = "time_til", reweight = TRUE) -> reg
+      treat_status = "treat_status", reweight = TRUE) -> reg
 
 par(mar = c(4.1, 4.1, .1, 4.1))
 iplot(res_naive, col = "black", grid = F,
@@ -228,7 +230,7 @@ It is also possible to pool together the treatment effects and get standard erro
 ```{r, fig.width=7, fig.height=5, fig.align='center', warning=FALSE, message = FALSE, cache=TRUE}
 lpdid(df = baker, window = c(-20, 20), y = "y",
       unit_index = "id", time_index = "year",
-      rel_time = "time_til", reweight = TRUE, pooled = TRUE) -> reg
+      treat_status = "treat_status", reweight = TRUE, pooled = TRUE) -> reg
 reg$coeftable
 ```
 
@@ -270,12 +272,12 @@ Notice the difference in this function call versus the previous ones.  First, th
 ```{r, fig.width=7, fig.height=5, fig.align='center', warning=FALSE, message = FALSE, cache=TRUE}
 lpdid(df = df, window = c(-12, 12), y = "y",
       unit_index = "id", time_index = "t",
-      nonabsorbing = TRUE, nonabsorbing_lag = 5,
-      nonabsorbing_treat_status = "treat_status") -> reg1
+      nonabsorbing_lag = 5,
+      treat_status = "treat_status") -> reg1
 lpdid(df = df, window = c(-12, 12), y = "y",
       unit_index = "id", time_index = "t",
-      nonabsorbing = TRUE, nonabsorbing_lag = 5,
-      nonabsorbing_treat_status = "treat_status",
+      nonabsorbing_lag = 5,
+      treat_status = "treat_status",
       reweight = TRUE) -> reg2
 par(mar = c(4.1, 4.1, .1, 4.1))
 plot_lpdid(reg1, x.shift = -0.05, col = "dodgerblue")
@@ -295,5 +297,8 @@ This is the first iteration of this package.  So, of course, there are some know
     - Fix a bug that caused too-large p-values when effects were negative
     - Change the way controls are input into the function. Now, you should use *formulas* instead of character vectors to supply controls. In addition, controls can be time invariant or time varying.
     - Allow the user to specify the level of clustering.
+- **Version 0.5.0** has been updated to:
+    - Add in support for FEs.
+    - Change the requirement for "rel_time" to "treat_status".
 
 Please direct any questions or comments to [Alex](mailto:alex.cardazzi@gmail.com) and all complaints to [Zach](mailto:zachary.porreca@unibocconi.it).
