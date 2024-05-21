@@ -10,7 +10,7 @@ lpdid(
   y,
   unit_index,
   time_index,
-  rel_time = "",
+  treat_status = "",
   cluster = NULL,
   controls = NULL,
   controls_t = NULL,
@@ -20,9 +20,7 @@ lpdid(
   pmd_lag,
   composition_correction = FALSE,
   pooled = FALSE,
-  nonabsorbing = FALSE,
-  nonabsorbing_lag,
-  nonabsorbing_treat_status = ""
+  nonabsorbing_lag = NULL
 )
 }
 \arguments{
@@ -37,14 +35,15 @@ The first number, denoting the number of pre-periods before treamtent, should be
 
 \item{time_index}{The name of the column that represents the calendar time.  This should be a character.}
 
-\item{rel_time}{The name of the column that contains a "time to treatment" vector.
-Values for untreated units must all be negative.}
+\item{treat_status}{The name of the column that denotes treatment status.
+This vector should take on a value of 1 for each time the unit is treated.
+As an example, in a state-year panel, if a state is treated in 1990 and 2010, the state should have 1's for 1990 and 2010 only.  All other year observations of this variable for this unit should be equal to 0.}
 
 \item{cluster}{The name of the column by which to cluster the standard errors.  Default is the unit ID.}
 
-\item{controls}{A formula of control variables to be included in the regression formula. The form should be: `~ X1 + X2`. These controls will be time invariant.}
+\item{controls}{A formula of control variables to be included in the regression formula. The form should be: `~ X1 + X2 | FE1 + FE2`. These controls will be time invariant.}
 
-\item{controls_t}{A formula of control variables to be included in the regression formula. The form should be: `~ X1 + X2`. These controls will be time varying.}
+\item{controls_t}{A formula of control variables to be included in the regression formula. The form should be: `~ X1 + X2 | FE1 + FE2`. These controls will be time varying.}
 
 \item{outcome_lags}{The number of outcome lags to be included in the analysis.
 For an example of this, simulate endogenous data via genr_sim_data(FALSE), and include one outcome lag.}
@@ -59,14 +58,7 @@ For an example of this, simulate endogenous data via genr_sim_data(FALSE), and i
 
 \item{pooled}{A boolean value (TRUE or FALSE) that, if equal to TRUE, will calculate the treatment effect pooled over all post-periods.}
 
-\item{nonabsorbing}{A boolean value (TRUE or FALSE) that, if equal to TRUE, will preform a routine similar to "stacking".
-Using this option requires a different variable than "rel_time".  More details can be seen in "nonabsorbing_treatment_status".}
-
-\item{nonabsorbing_lag}{Sets the number of periods after which dynamic effects stabilize.}
-
-\item{nonabsorbing_treat_status}{The name of the column that denotes treatment status.
-This vector should take on a value of 1 for each time the unit is treated.
-As an example, in a state-year panel, if a state is treated in 1990 and 2010, the state should have 1's for 1990 and 2010 only.  All other year observations of this variable for this unit should be equal to 0.}
+\item{nonabsorbing_lag}{Sets the number of periods after which dynamic effects stabilize. This number must be greater than zero, and will indicate to the function that you'd like to estimate a nonabsorbing treatment effect.}
 }
 \value{
 A list including a coefficient table and window vector.
