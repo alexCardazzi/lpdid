@@ -236,58 +236,60 @@ reg$coeftable
 
 ## Non-Absorbing Treatment
 
-A final feature of the package (that is still under construction), is handling non-absorbing treatment.  The treatment example used in Dube et al. (2023) is changes in the minimum wage.  It is impossible to find a "clean control" since all states have increased the minimum wage at one point or another.  So, the authors (see also [Cengiz et al., 2019](https://doi.org/10.1093/qje/qjz014)) make an assumption that $L$ time periods after treatment, the effect "stabilizes".  See the text for more details.
+This is under construction...
 
-Below, we simulate data where there are three groups.  First, there is an untreated group.  Second, there is a group that gets treated only a single time.  Finally, there is a group that is treated twice.  The effect sizes are 15 and 35 for first and second treatments.  The aggregated time series plots can be seen below.
+<!-- A final feature of the package (that is still under construction), is handling non-absorbing treatment.  The treatment example used in Dube et al. (2023) is changes in the minimum wage.  It is impossible to find a "clean control" since all states have increased the minimum wage at one point or another.  So, the authors (see also [Cengiz et al., 2019](https://doi.org/10.1093/qje/qjz014)) make an assumption that $L$ time periods after treatment, the effect "stabilizes".  See the text for more details. -->
 
-```{r, fig.width=7, fig.height=5, fig.align='center', warning=FALSE, message = FALSE, cache=TRUE}
-set.seed(757)
-rm(list = ls())
-I <- 50; bigT <- 50; N <- I * bigT; e_var <- 4
-data.frame(id = rep(1:I, each = bigT),
-           t = rep(1:bigT, I),
-           e = rnorm(N, 0, e_var)) -> df
-unit_FE <- rnorm(I, 0, e_var)
-time_FE <- rnorm(bigT, 0, e_var)
-df$treated <- ifelse(df$id < 21, 1, 0)
-df$treat_status <- ifelse(df$id < 21 & df$t == 16, 1, 0)
-df$treat_status <- ifelse(df$id < 11 & df$t == 36, 1, df$treat_status)
-ifelse(df$id < 11,
-       ifelse(df$t > 35, 50,
-              ifelse(df$t > 15, 15, 0)),
-       ifelse(df$id < 21,
-              ifelse(df$t > 15, 15, 0),
-              0)) -> df$beta
-df$y <- df$e + unit_FE[df$id] + time_FE[df$t] + df$beta
-df$group <- ifelse(df$id < 11, 1, ifelse(df$id < 21, 2, 3))
+<!-- Below, we simulate data where there are three groups.  First, there is an untreated group.  Second, there is a group that gets treated only a single time.  Finally, there is a group that is treated twice.  The effect sizes are 15 and 35 for first and second treatments.  The aggregated time series plots can be seen below. -->
 
-agg <- aggregate(df$y, list(df$t, df$group), mean)
-par(mar = c(4.1, 4.1, .1, 4.1))
-plot(agg$Group.1, agg$x, col = agg$Group.2 + 1, pch = 19,
-     xlab = "Time", ylab = "Outcome")
-```
+<!-- ```{r, fig.width=7, fig.height=5, fig.align='center', warning=FALSE, message = FALSE, cache=TRUE} -->
+<!-- set.seed(757) -->
+<!-- rm(list = ls()) -->
+<!-- I <- 50; bigT <- 50; N <- I * bigT; e_var <- 4 -->
+<!-- data.frame(id = rep(1:I, each = bigT), -->
+<!--            t = rep(1:bigT, I), -->
+<!--            e = rnorm(N, 0, e_var)) -> df -->
+<!-- unit_FE <- rnorm(I, 0, e_var) -->
+<!-- time_FE <- rnorm(bigT, 0, e_var) -->
+<!-- df$treated <- ifelse(df$id < 21, 1, 0) -->
+<!-- df$treat_status <- ifelse(df$id < 21 & df$t == 16, 1, 0) -->
+<!-- df$treat_status <- ifelse(df$id < 11 & df$t == 36, 1, df$treat_status) -->
+<!-- ifelse(df$id < 11, -->
+<!--        ifelse(df$t > 35, 50, -->
+<!--               ifelse(df$t > 15, 15, 0)), -->
+<!--        ifelse(df$id < 21, -->
+<!--               ifelse(df$t > 15, 15, 0), -->
+<!--               0)) -> df$beta -->
+<!-- df$y <- df$e + unit_FE[df$id] + time_FE[df$t] + df$beta -->
+<!-- df$group <- ifelse(df$id < 11, 1, ifelse(df$id < 21, 2, 3)) -->
 
-Notice the difference in this function call versus the previous ones.  First, there is no ```rel_time``` argument needed.  This is because the function will generate ```rel_time``` by itself. However, you must include ```nonabsorbing = TRUE``` in addition to a ```nonabsorbing_lag``` and ```nonabsorbing_treat_status```.  ```nonabsorbing_lag``` represents the number of periods until the dynamic treatment effects stabilize.  Then, ```nonabsorbing_treat_status``` takes on values of ```1``` each time a unit gets treated.
+<!-- agg <- aggregate(df$y, list(df$t, df$group), mean) -->
+<!-- par(mar = c(4.1, 4.1, .1, 4.1)) -->
+<!-- plot(agg$Group.1, agg$x, col = agg$Group.2 + 1, pch = 19, -->
+<!--      xlab = "Time", ylab = "Outcome") -->
+<!-- ``` -->
 
-```{r, fig.width=7, fig.height=5, fig.align='center', warning=FALSE, message = FALSE, cache=TRUE}
-lpdid(df = df, window = c(-12, 12), y = "y",
-      unit_index = "id", time_index = "t",
-      nonabsorbing_lag = 5,
-      treat_status = "treat_status") -> reg1
-lpdid(df = df, window = c(-12, 12), y = "y",
-      unit_index = "id", time_index = "t",
-      nonabsorbing_lag = 5,
-      treat_status = "treat_status",
-      reweight = TRUE) -> reg2
-par(mar = c(4.1, 4.1, .1, 4.1))
-plot_lpdid(reg1, x.shift = -0.05, col = "dodgerblue")
-plot_lpdid(reg2, x.shift = 0.05, col = "tomato", add = T)
-abline(h = mean(c(15, 15, 35)), lty = 2)
-legend("topleft", legend = c("VWATT", "EWATT"), bty = "n",
-       col = c("dodgerblue", "tomato"), pch = 19)
-```
+<!-- Notice the difference in this function call versus the previous ones.  First, there is no ```rel_time``` argument needed.  This is because the function will generate ```rel_time``` by itself. However, you must include ```nonabsorbing = TRUE``` in addition to a ```nonabsorbing_lag``` and ```nonabsorbing_treat_status```.  ```nonabsorbing_lag``` represents the number of periods until the dynamic treatment effects stabilize.  Then, ```nonabsorbing_treat_status``` takes on values of ```1``` each time a unit gets treated. -->
 
-## Under Construction
+<!-- ```{r, fig.width=7, fig.height=5, fig.align='center', warning=FALSE, message = FALSE, cache=TRUE} -->
+<!-- lpdid(df = df, window = c(-12, 12), y = "y", -->
+<!--       unit_index = "id", time_index = "t", -->
+<!--       nonabsorbing_lag = 5, -->
+<!--       treat_status = "treat_status") -> reg1 -->
+<!-- lpdid(df = df, window = c(-12, 12), y = "y", -->
+<!--       unit_index = "id", time_index = "t", -->
+<!--       nonabsorbing_lag = 5, -->
+<!--       treat_status = "treat_status", -->
+<!--       reweight = TRUE) -> reg2 -->
+<!-- par(mar = c(4.1, 4.1, .1, 4.1)) -->
+<!-- plot_lpdid(reg1, x.shift = -0.05, col = "dodgerblue") -->
+<!-- plot_lpdid(reg2, x.shift = 0.05, col = "tomato", add = T) -->
+<!-- abline(h = mean(c(15, 15, 35)), lty = 2) -->
+<!-- legend("topleft", legend = c("VWATT", "EWATT"), bty = "n", -->
+<!--        col = c("dodgerblue", "tomato"), pch = 19) -->
+<!-- ``` -->
+
+## Informal Changelog
 
 This is the first iteration of this package.  So, of course, there are some known (and surely many unknown) bugs.  Some of them are as follows:
 
@@ -300,5 +302,8 @@ This is the first iteration of this package.  So, of course, there are some know
 - **Version 0.5.0** has been updated to:
     - Add in support for FEs.
     - Change the requirement for "rel_time" to "treat_status".
+- **Version 0.6.0** has been updated to:
+    - Fix a bug that caused `NA` estimates with `composition_correction = TRUE`.
+    - Change some argument names to match the `STATA` version of the same function. Additional changes are in the works to make these two packages as similar as possible. Old argument names will continue to work.
 
 Please direct any questions or comments to [Alex](mailto:alex.cardazzi@gmail.com) and all complaints to [Zach](mailto:zachary.porreca@unibocconi.it).

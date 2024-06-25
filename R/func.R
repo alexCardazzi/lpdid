@@ -212,55 +212,49 @@ genr_sim_data <- function(exogenous_timing = TRUE, seed = 757){
 #' @param df The dataset used in the analysis.
 #' @param window A vector of length two that denotes the length of the pre- and post-periods.
 #'  The first number, denoting the number of pre-periods before treamtent, should be negative and second, denoting the number of post periods after treatment, should be positive.
-#' @param y The outcome variable.  This should be input as a character, the name of the outcome variable in the data.
-#' @param treat_status The name of the column that denotes treatment status.
-#'  This vector should take on a value of 1 for each time the unit is treated.
-#'  As an example, in a state-year panel, if a state is treated in 1990 and 2010, the state should have 1's for 1990 and 2010 only.  All other year observations of this variable for this unit should be equal to 0.
-#' @param unit_index The name of the column that represents the unit ID.  This should be a character.
-#' @param time_index The name of the column that represents the calendar time.  This should be a character.
+#' @param depvar The outcome variable.  This should be input as a character, the name of the outcome variable in the data. Note: @param y will continue to work for backwards compatibility.
+#' @param treat_status The name of the column that defines treatment. This column is expected to contain 0's before treatment, and 1's during and following treatment.
+#' @param unit The name of the column that represents the unit ID.  This should be a character. Note: @param unit_index will continue to work for backwards compatibility.
+#' @param time The name of the column that represents the calendar time.  This should be a character. Note: @param time_index will continue to work for backwards compatibility.
 #' @param cluster The name of the column by which to cluster the standard errors.  Default is the unit ID.
 #' @param controls A formula of control variables to be included in the regression formula. The form should be: `~ X1 + X2 | FE1 + FE2`. These controls will be time invariant.
 #' @param controls_t A formula of control variables to be included in the regression formula. The form should be: `~ X1 + X2 | FE1 + FE2`. These controls will be time varying.
-#' @param outcome_lags The number of outcome lags to be included in the analysis.
-#'  For an example of this, simulate endogenous data via genr_sim_data(FALSE), and include one outcome lag.
-#' @param reweight A boolean (TRUE or FALSE) value that will re-weight the regression and generate ATT rather than VWATT. The default is FALSE, which corresponds to the estimator calculating the VWATT (variance weighted average treatment effect on the treated).
+#' @param dylags The number of outcome lags to be included in the analysis.
+#'  For an example of this, simulate endogenous data via genr_sim_data(FALSE), and include one outcome lag. Note: @param outcome_lags will continue to work for backwards compatibility.
+#' @param rw A boolean (TRUE or FALSE) value that will re-weight the regression and generate ATT rather than VWATT. The default is FALSE, which corresponds to the estimator calculating the VWATT (variance weighted average treatment effect on the treated). Note: @param reweight will continue to work for backwards compatibility.
 #' @param pmd A boolean (TRUE or FALSE) value that, if equal to TRUE, will use pre-treatment means rather than a single value from t-1.
 #' @param pmd_lag The number of pre-treatment periods to include in taking the mean.
-#' @param composition_correction A boolean value that will remove later-treated observations from the control group even before they are treated.  See Section 2.10 "Composition effects".
+#' @param nocomp A boolean value that will remove later-treated observations from the control group even before they are treated.  See Section 2.10 "Composition effects". Note: @param composition_correction will continue to work for backwards compatibility.
 #' @param pooled A boolean value (TRUE or FALSE) that, if equal to TRUE, will calculate the treatment effect pooled over all post-periods.
-#' @param nonabsorbing_lag Sets the number of periods after which dynamic effects stabilize. This number must be greater than zero, and will indicate to the function that you'd like to estimate a nonabsorbing treatment effect.
-
+#' @param nonabsorbing_lag Sets the number of periods after which dynamic effects are assumed to stabilize (and thus the unit can return to the control group). This number must be greater than zero, and will indicate to the function that you'd like to estimate a nonabsorbing treatment effect.
 #' @return A list including a coefficient table and window vector.
 #' @export
-lpdid <- function(df, window = c(NA, NA), y,
-                  unit_index, time_index,
+lpdid <- function(df, window = c(NA, NA),
+                  depvar,
+                  unit, time,
                   treat_status = "",
                   cluster = NULL,
                   controls = NULL,
                   controls_t = NULL,
-                  outcome_lags = 0,
-                  reweight = FALSE,
+                  dylags = 0,
+                  rw = FALSE,
                   pmd = FALSE, pmd_lag,
-                  composition_correction = FALSE,
+                  nocomp = FALSE,
                   pooled = FALSE,
-                  nonabsorbing_lag = NULL){
+                  nonabsorbing_lag = NULL,
+                  y, unit_index, time_index, outcome_lags = 0, reweight = FALSE, composition_correction = FALSE){
 
   if(is.null(cluster)) cluster <- unit_index
 
+  y <- ifelse(!missing(depvar), depvar, y)
+  unit_index <- ifelse(!missing(unit), unit, unit_index)
+  time_index <- ifelse(!missing(time), time, time_index)
+  outcome_lags <- ifelse(!missing(dylags), dylags, outcome_lags)
+  reweight <- ifelse(!missing(rw), rw, reweight)
+  composition_correction <- ifelse(!missing(nocomp), nocomp, composition_correction)
+
   pre_window <- -1*window[1]; post_window <- window[2]
 
-  # if(nonabsorbing & reweight){
-  #
-  #   reweight <- FALSE
-  #   message("Note: reweighting does not currently work for the non-absorbing estimation.")
-  # }
-  # if(pooled & (outcome_lags > 0 | !is.null(controls))){
-  #
-  #   pooled <- FALSE
-  #   message("Note: pooled does not currently work with controls (or outcome lags).")
-  # }
-
-  # Convert df to pdata.frame
   if(!inherits(df, "pdata.frame")) df <- pdata.frame(df, index=c(unit_index,time_index), drop.index=FALSE, row.names=FALSE)
   df[,unit_index] <- as.character(df[,unit_index]); df[,time_index] <- as.numeric(df[,time_index])
 
@@ -278,25 +272,41 @@ lpdid <- function(df, window = c(NA, NA), y,
 
   # create "rel_time" variable for nonabsorbing
   rel_time <- "rel_time"
-  df[,rel_time] <- NA
-  for(i in unique(df[,unit_index])){
+  df[,rel_time] <- NA; df[,"treat_date"] <- NA
 
-    id_logic <- which(df[,unit_index] == i)
-    valz <- df[id_logic[df[id_logic, treat_status] == 1], time_index]
-    if(!is.na(valz[1])){
+  # @param treat_status The name of the column that denotes treatment status.
+  #  This vector should take on a value of 1 for each time the unit is treated.
+  #  As an example, in a state-year panel, if a state is treated in 1990 and 2010, the state should have 1's for 1990 and 2010 only.  All other year observations of this variable for this unit should be equal to 0.
 
-      mat <- matrix(NA, ncol = length(valz), nrow = length(id_logic))
+  if(FALSE){ # this is a placeholder for more complicated treatments...
+    for(i in unique(df[,unit_index])){
 
-      for(j in valz){
+      id_logic <- which(df[,unit_index] == i)
+      valz <- df[id_logic[df[id_logic, treat_status] == 1], time_index]
+      if(!is.na(valz[1])){
 
-        mat[,which(j == valz)] <- df[id_logic, time_index] - j
+        mat <- matrix(NA, ncol = length(valz), nrow = length(id_logic))
+
+        for(j in valz){
+
+          mat[,which(j == valz)] <- df[id_logic, time_index] - j
+        }
+
+        df[id_logic, rel_time] <- apply(mat, 1, function(x) x[which(abs(x) == min(abs(x)))[1]])
+        df[id_logic, "treat_date"] <- apply(mat, 1, function(x) valz[which(abs(x) == min(abs(x)))[1]])
+      } else {
+
+        df[id_logic, rel_time] <- -1000
       }
-
-      df[id_logic, rel_time] <- apply(mat, 1, function(x) x[which(abs(x) == min(abs(x)))[1]])
-    } else {
-
-      df[id_logic, rel_time] <- -1000
     }
+  } else {
+
+    agg <- aggregate(list(time_index = df[df[,treat_status] > 0,time_index]),
+                     list(unit_index = df[df[,treat_status] > 0,unit_index]),
+                     min)
+    m <- match(df[,unit_index], agg$unit_index)
+    df[,"treat_date"] <- ifelse(is.na(m), -1000, agg$time_index[m])
+    df[,rel_time] <- ifelse(is.na(m), -1000, df[,time_index] - agg$time_index[m])
   }
 
   df$treat <- ifelse(df[,rel_time] >= 0, 1, 0)
@@ -361,10 +371,6 @@ lpdid <- function(df, window = c(NA, NA), y,
 
       df$Dy <- lead(df[,y], j) - df$the_lag
 
-      # # Create Formula
-      # if(!is.null(controls)) controls <- paste0(" + ", paste(controls, collapse = " + "))
-      # frmla <- as.formula(paste0("Dy ~ treat_diff", controls, " | ", time_index))
-
       frmla <- "Dy ~ treat_diff"
       if(!is.null(lagz[1])) lagz <- paste(lagz, collapse = " + ")
       if(!is.null(lagz[1])) frmla <- paste0(frmla, " + ", lagz)
@@ -394,8 +400,14 @@ lpdid <- function(df, window = c(NA, NA), y,
       # Create "Limit"
       if(!nonabsorbing){
 
-        lim <- !is.na(df[,"Dy"]) & !is.na(df$treat_diff) & !is.na(lead(df$treat, j)) & (df$treat_diff == 1 | lead(df$treat, j) == 0)
-        if(composition_correction) lim <- !is.na(df[,"Dy"]) & !is.na(df$treat_diff) & !is.na(lead(df$treat, j)) & (df$treat_diff == 1 | lead(df$treat, post_window) == 0) & (is.na(df$treat_date) | (df$treat_date < max(df[,time_index]) - post_window))
+        lim <- !is.na(df[,"Dy"]) & !is.na(df$treat_diff) & !is.na(lead(df$treat, j))
+        if(composition_correction){
+
+          lim <- lim & (df$treat_diff == 1 | lead(df$treat, post_window) == 0) & (is.na(df$treat_date) | (df$treat_date < max(df[,time_index]) - post_window))
+        } else {
+
+          lim <- lim & (df$treat_diff == 1 | lead(df$treat, j) == 0)
+        }
       } else {
 
         ## Non-Absorbing Limit
@@ -407,7 +419,7 @@ lpdid <- function(df, window = c(NA, NA), y,
         }
         df$lim_c <- ifelse(lim_ctrl, 1, 0)
         df$lim_t <- ifelse(lim_treat, 1, 0)
-        lim <- lim_ctrl | lim_treat# & df$reweight_use > 0
+        lim <- lim_ctrl | lim_treat
       }
       lim <- !is.na(lim) & lim
 
@@ -441,9 +453,6 @@ lpdid <- function(df, window = c(NA, NA), y,
 
       df$Dy <- lag(df[,y], j) - df$the_lag
 
-      # if(!is.null(controls)) controls <- paste0(" + ", paste(controls, collapse = " + "))
-      # frmla <- as.formula(paste0("Dy ~ treat_diff", controls, " | ", time_index))
-
       frmla <- "Dy ~ treat_diff"
       if(!is.null(lagz[1])) lagz <- paste(lagz, collapse = " + ")
       if(!is.null(lagz[1])) frmla <- paste0(frmla, " + ", lagz)
@@ -472,8 +481,14 @@ lpdid <- function(df, window = c(NA, NA), y,
 
       if(!nonabsorbing){
 
-        lim <- !is.na(df[,"Dy"]) & !is.na(df$treat_diff) & !is.na(df$treat) & (df$treat_diff == 1 | df$treat == 0)
-        if(composition_correction) lim <- !is.na(df[,"Dy"]) & !is.na(df$treat_diff) & !is.na(df$treat) & (df$treat_diff == 1 | lead(df$treat, post_window) == 0) & (is.na(df$treat_date) | (df$treat_date < max(df[,time_index]) - post_window))
+        lim <- !is.na(df[,"Dy"]) & !is.na(df$treat_diff) & !is.na(df$treat)
+
+        if(composition_correction){
+          lim <- lim & (df$treat_diff == 1 | lead(df$treat, post_window) == 0) & (is.na(df$treat_date) | (df$treat_date < (max(df[,time_index]) - post_window)))
+        } else {
+          lim <- lim & (df$treat_diff == 1 | df$treat == 0)
+        }
+
       } else {
 
         ## Non-Absorbing Limit
