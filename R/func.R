@@ -356,6 +356,7 @@ lpdid <- function(df, window = c(NA, NA),
   lpdid_betaz <- rep(0, length(-pre_window:post_window))
   lpdid_sez <- rep(0, length(-pre_window:post_window))
   lpdid_nz <- rep(0, length(-pre_window:post_window))
+  lpdid_betaz <- vector(NULL, mode = "list", length(-pre_window:post_window))
 
   if(pooled) loop_bound <- 0 else loop_bound <- max(post_window, pre_window)
   # j<-2
@@ -440,6 +441,7 @@ lpdid <- function(df, window = c(NA, NA),
         lpdid_betaz[match(j, -pre_window:post_window)] <- tmp$coeftable[1,1]
         lpdid_sez[match(j, -pre_window:post_window)] <- tmp$coeftable[1,2]
         lpdid_nz[match(j, -pre_window:post_window)] <- nobs(tmp)
+        lpdid_regz[match(j, -pre_window:post_window)] <- tmp
       } else {
 
         lpdid_betaz[match(j, -pre_window:post_window)] <- NA
@@ -509,6 +511,7 @@ lpdid <- function(df, window = c(NA, NA),
         lpdid_betaz[match(-j, -pre_window:post_window)] <- tmp$coeftable[1,1]
         lpdid_sez[match(-j, -pre_window:post_window)] <- tmp$coeftable[1,2]
         lpdid_nz[match(-j, -pre_window:post_window)] <- nobs(tmp)
+        lpdid_regz[match(-j, -pre_window:post_window)] <- tmp
       } else {
 
         lpdid_betaz[match(-j, -pre_window:post_window)] <- NA
@@ -525,9 +528,12 @@ lpdid <- function(df, window = c(NA, NA),
                           check.names = FALSE)
   if(pooled) coeftable <- coeftable[match(0, -pre_window:post_window),]
   coeftable[,4] <- pnorm(abs(coeftable$`t value`), lower.tail = F)
-  return(list(coeftable = coeftable[!is.na(coeftable$Estimate),],
-              # df = df,
-              window = c(-pre_window:post_window)[!is.na(coeftable$Estimate)],
-              nobs = data.frame(window = c(-pre_window:post_window),
-                                nobs = lpdid_nz)))
+
+  print(coeftable[!is.na(coeftable$Estimate),])
+  invisible(list(coeftable = coeftable[!is.na(coeftable$Estimate),],
+                 # df = df,
+                 window = c(-pre_window:post_window)[!is.na(coeftable$Estimate)],
+                 nobs = data.frame(window = c(-pre_window:post_window),
+                                   nobs = lpdid_nz),
+                 regz = lpdid_regz))
 }
