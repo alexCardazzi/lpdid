@@ -242,7 +242,9 @@ lpdid <- function(df, window = c(NA, NA),
                   nocomp = FALSE,
                   pooled = FALSE,
                   nonabsorbing_lag = NULL,
-                  y, unit_index, time_index, outcome_lags = 0, reweight = FALSE, composition_correction = FALSE){
+                  y, unit_index, time_index,
+                  outcome_lags = 0, reweight = FALSE,
+                  composition_correction = FALSE){
 
   if(is.null(cluster)) cluster <- unit_index
 
@@ -356,7 +358,7 @@ lpdid <- function(df, window = c(NA, NA),
   lpdid_betaz <- rep(0, length(-pre_window:post_window))
   lpdid_sez <- rep(0, length(-pre_window:post_window))
   lpdid_nz <- rep(0, length(-pre_window:post_window))
-  lpdid_betaz <- vector(NULL, mode = "list", length(-pre_window:post_window))
+  lpdid_regz <- vector(mode = "list", length(-pre_window:post_window))
 
   if(pooled) loop_bound <- 0 else loop_bound <- max(post_window, pre_window)
   # j<-2
