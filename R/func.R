@@ -443,7 +443,7 @@ lpdid <- function(df, window = c(NA, NA),
         lpdid_betaz[match(j, -pre_window:post_window)] <- tmp$coeftable[1,1]
         lpdid_sez[match(j, -pre_window:post_window)] <- tmp$coeftable[1,2]
         lpdid_nz[match(j, -pre_window:post_window)] <- nobs(tmp)
-        lpdid_regz[match(j, -pre_window:post_window)] <- tmp
+        lpdid_regz[[match(j, -pre_window:post_window)]] <- tmp
       } else {
 
         lpdid_betaz[match(j, -pre_window:post_window)] <- NA
@@ -513,7 +513,7 @@ lpdid <- function(df, window = c(NA, NA),
         lpdid_betaz[match(-j, -pre_window:post_window)] <- tmp$coeftable[1,1]
         lpdid_sez[match(-j, -pre_window:post_window)] <- tmp$coeftable[1,2]
         lpdid_nz[match(-j, -pre_window:post_window)] <- nobs(tmp)
-        lpdid_regz[match(-j, -pre_window:post_window)] <- tmp
+        lpdid_regz[[match(-j, -pre_window:post_window)]] <- tmp
       } else {
 
         lpdid_betaz[match(-j, -pre_window:post_window)] <- NA
